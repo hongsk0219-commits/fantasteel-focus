@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>판타스틸 포커스 (Fantasteel Focus)</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background-color: #0b0e14;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Pretendard', sans-serif;
+      position: relative;
+    }
+    #gameCanvas {
+      background-color: #ffffff;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      touch-action: none;
+      display: block;
+    }
+    /* 전체화면 토글 버튼 스타일 (fixed로 화면 우측 상단 고정) */
+    #btnFullscreen {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 8px 16px;
+      background-color: rgba(31, 41, 55, 0.85);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 999;
+      transition: background 0.2s;
+    }
+    #btnFullscreen:hover {
+      background-color: rgba(37, 99, 235, 0.9);
+    }
+  </style>
+</head>
+<body>
+
+<button id="btnFullscreen" onclick="toggleFullscreen()">전체화면</button>
+<canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const CANVAS_WIDTH = 1280;
+const CANVAS_HEIGHT = 720;
+
+// ==========================================
+// [1] 사용할 이미지 파일 등록하기
+// ==========================================
+const assets = {
+  startBg: new Image(),
+  decoyRound1: new Image(),
+  targetRound1: new Image(),
+  decoyRound2: new Image(),
+  targetRound2: new Image(),
+  decoyRound3: new Image(),
+  targetRound3: new Image()
+};
+
+// 파일 경로 연결
+assets.startBg.src = 'https://i.postimg.cc/zBjLPB2F/Kakao-Talk-20260909-102747777.jpg';
+
+assets.decoyRound1.src = 'https://i.postimg.cc/06174bCj/Kakao-Talk-20260909-001139361.png';
+assets.targetRound1.src = 'https://i.postimg.cc/Z9z6QCL0/Kakao-Talk-20260909-001139361-01.png';
+
+assets.decoyRound2.src = 'https://i.postimg.cc/mkNscJzX/Kakao-Talk-20260908-234503943.png';
+assets.targetRound2.src = 'https://i.postimg.cc/jjZtcGZZ/Kakao-Talk-20260908-234018843.png';
+
+assets.decoyRound3.src = 'https://i.postimg.cc/PNL30FsG/Kakao-Talk-20260909-005041012-01.png';
+assets.targetRound3.src = 'https://i.postimg.cc/kX5kxfH4/Kakao-Talk-20260909-010940556.png';
+
+// ==========================================
+// [2] 라운드별 설정
+// ==========================================
+const ROUND_CONFIG = {
+  1: {
+    name: "ROUND 1 (기초 시야)",
+    mission: "판타스틸 서포터즈 로고를 찾아 터치하세요!",
+    totalCount: 5,
+    speed: 3.5,
+    radius: 45,
+    targetImg: assets.targetRound1,
+    decoyImg: assets.decoyRound1,
+    fallbackTargetColor: '#e74c3c',
+    fallbackDecoyColor: '#2980b9'
+  },
+  2: {
+    name: "ROUND 2 (난전 포착)",
+    mission: "제카 사이의 쉿상혁을 찾아라!",
+    totalCount: 8,
+    speed: 5.5,
+    radius: 40,
+    targetImg: assets.targetRound2,
+    decoyImg: assets.decoyRound2,
+    fallbackTargetColor: '#e67e22',
+    fallbackDecoyColor: '#2c3e50'
+  },
+  3: {
+    name: "ROUND 3 (초집중 모드)",
+    mission: "안경을 쓰고 있는 판타스틸 서포터즈 석호를 찾아보세요!!",
+    totalCount: 12,
+    speed: 7.5,
+    radius: 42,
+    targetImg: assets.targetRound3,
+    decoyImg: assets.decoyRound3,
+    fallbackTargetColor: '#ff2a2a',
+    fallbackDecoyColor: '#e84118'
+  }
+};
+
+const STATE = {
+  START: 'START',
+  READY: 'READY',
+  PLAYING: 'PLAYING',
+  FAIL: 'FAIL',
+  SUCCESS: 'SUCCESS'
+};
+
+let currentState = STATE.START;
+let currentRound = 1;
+let readyTimer = 2.0;
+let playTimer = 5.0; // 5초 설정
+let lastTime = 0;
+let targets = [];
+
+// ==========================================
+// [3] 타깃 객체 클래스
+// ==========================================
+class TargetItem {
+  constructor(x, y, vx, vy, radius, isAnswer, img, fallbackColor) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.radius = radius;
+    this.isAnswer = isAnswer;
+    this.img = img;
+    this.fallbackColor = fallbackColor;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+
+    const topBoundary = 90;
+    if (this.x - this.radius < 0) {
+      this.x = this.radius;
+      this.vx *= -1;
+    } else if (this.x + this.radius > CANVAS_WIDTH) {
+      this.x = CANVAS_WIDTH - this.radius;
+      this.vx *= -1;
+    }
+
+    if (this.y - this.radius < topBoundary) {
+      this.y = topBoundary + this.radius;
+      this.vy *= -1;
+    } else if (this.y + this.radius > CANVAS_HEIGHT) {
+      this.y = CANVAS_HEIGHT - this.radius;
+      this.vy *= -1;
+    }
+  }
+
+  draw(context) {
+    context.save();
+    context.beginPath();
+    context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    context.closePath();
+    context.clip();
+
+    if (this.img && this.img.complete && this.img.naturalWidth !== 0) {
+      context.drawImage(
+        this.img,
+        this.x - this.radius,
+        this.y - this.radius,
+        this.radius * 2,
+        this.radius * 2
+      );
+    } else {
+      context.fillStyle = this.fallbackColor;
+      context.fill();
+    }
+
+    context.restore();
+
+    context.save();
+    context.beginPath();
+    context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    context.lineWidth = 2;
+    context.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+    context.stroke();
+    context.restore();
+  }
+
+  isTouched(tx, ty) {
+    return Math.hypot(this.x - tx, this.y - ty) <= this.radius;
+  }
+}
+
+function initRound(roundNum) {
+  const config = ROUND_CONFIG[roundNum];
+  targets = [];
+
+  for (let i = 0; i < config.totalCount; i++) {
+    const isAnswer = (i === 0);
+    const angle = Math.random() * Math.PI * 2;
+    const vx = Math.cos(angle) * config.speed;
+    const vy = Math.sin(angle) * config.speed;
+
+    const x = Math.random() * (CANVAS_WIDTH - config.radius * 2) + config.radius;
+    const y = Math.random() * (CANVAS_HEIGHT - 120 - config.radius * 2) + (100 + config.radius);
+
+    const img = isAnswer ? config.targetImg : config.decoyImg;
+    const fallbackColor = isAnswer ? config.fallbackTargetColor : config.fallbackDecoyColor;
+
+    targets.push(new TargetItem(x, y, vx, vy, config.radius, isAnswer, img, fallbackColor));
+  }
+
+  targets.sort(() => Math.random() - 0.5);
+}
+
+function drawButton(text, x, y, width, height, bgColor = '#1e3799') {
+  ctx.save();
+  ctx.fillStyle = bgColor;
+  ctx.beginPath();
+  ctx.roundRect(x - width / 2, y - height / 2, width, height, 12);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function checkButtonArea(tx, ty, cx, cy, width, height) {
+  return (
+    tx >= cx - width / 2 &&
+    tx <= cx + width / 2 &&
+    ty >= cy - height / 2 &&
+    ty <= cy + height / 2
+  );
+}
+
+function gameLoop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const delta = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  switch (currentState) {
+    case STATE.START:
+      renderStartScreen();
+      break;
+
+    case STATE.READY:
+      readyTimer -= delta;
+      renderReadyScreen();
+      if (readyTimer <= 0) {
+        currentState = STATE.PLAYING;
+        playTimer = 5.0;
+      }
+      break;
+
+    case STATE.PLAYING:
+      playTimer -= delta;
+      if (playTimer <= 0) {
+        playTimer = 0;
+        currentState = STATE.FAIL;
+      }
+
+      targets.forEach(t => {
+        t.update();
+        t.draw(ctx);
+      });
+
+      renderPlayHeader();
+      break;
+
+    case STATE.FAIL:
+      renderFailScreen();
+      break;
+
+    case STATE.SUCCESS:
+      renderSuccessScreen();
+      break;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+function renderStartScreen() {
+  // 등록한 배경 이미지를 캔버스 전체에 표시
+  if (assets.startBg.complete && assets.startBg.naturalWidth !== 0) {
+    ctx.drawImage(assets.startBg, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  } else {
+    ctx.fillStyle = '#0b0e14';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+
+  // 텍스트는 모두 제거하고 게임 시작 버튼만 배치 (기존 위치 Y: 440)
+  drawButton("게임 시작하기", CANVAS_WIDTH / 2, 440, 240, 65, '#2563eb');
+}
+
+function renderReadyScreen() {
+  const config = ROUND_CONFIG[currentRound];
+  ctx.fillStyle = '#2563eb';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(config.name, CANVAS_WIDTH / 2, 230);
+
+  ctx.fillStyle = '#374151';
+  ctx.font = '24px sans-serif';
+  ctx.fillText(config.mission, CANVAS_WIDTH / 2, 280);
+
+  ctx.fillStyle = '#ef4444';
+  ctx.font = 'bold 90px sans-serif';
+  ctx.fillText(Math.ceil(readyTimer), CANVAS_WIDTH / 2, 410);
+
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = '18px sans-serif';
+  ctx.fillText("잠시 후 게임이 시작됩니다...", CANVAS_WIDTH / 2, 480);
+}
+
+function renderPlayHeader() {
+  ctx.fillStyle = '#f3f4f6';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, 80);
+
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`STAGE ${currentRound} / 3`, 40, 48);
+
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 28px monospace';
+  ctx.fillStyle = playTimer <= 2.0 ? '#dc2626' : '#111827';
+  ctx.fillText(`제한시간: ${playTimer.toFixed(1)}s`, CANVAS_WIDTH - 40, 48);
+
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.beginPath();
+  ctx.moveTo(0, 80);
+  ctx.lineTo(CANVAS_WIDTH, 80);
+  ctx.stroke();
+}
+
+function renderFailScreen() {
+  ctx.fillStyle = '#dc2626';
+  ctx.font = 'bold 72px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText("실패 (FAIL)", CANVAS_WIDTH / 2, 290);
+
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '22px sans-serif';
+  ctx.fillText("시간 초과 또는 잘못된 대상을 터치하였습니다.", CANVAS_WIDTH / 2, 350);
+
+  drawButton("처음으로", CANVAS_WIDTH / 2, 460, 220, 60, '#1f2937');
+}
+
+function renderSuccessScreen() {
+  ctx.fillStyle = '#16a34a';
+  ctx.font = 'bold 72px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText("최종 성공 (PASS)", CANVAS_WIDTH / 2, 290);
+
+  ctx.fillStyle = '#4b5563';
+  ctx.font = '24px sans-serif';
+  ctx.fillText("축하합니다! 모든 동체시력 검증을 통과하셨습니다.", CANVAS_WIDTH / 2, 355);
+
+  drawButton("처음으로", CANVAS_WIDTH / 2, 460, 220, 60, '#16a34a');
+}
+
+function handleInteraction(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CANVAS_WIDTH / rect.width;
+  const scaleY = CANVAS_HEIGHT / rect.height;
+
+  const touchX = (clientX - rect.left) * scaleX;
+  const touchY = (clientY - rect.top) * scaleY;
+
+  if (currentState === STATE.START) {
+    if (checkButtonArea(touchX, touchY, CANVAS_WIDTH / 2, 440, 240, 65)) {
+      currentRound = 1;
+      readyTimer = 2.0;
+      initRound(currentRound);
+      currentState = STATE.READY;
+    }
+  } else if (currentState === STATE.PLAYING) {
+    for (let i = 0; i < targets.length; i++) {
+      if (targets[i].isTouched(touchX, touchY)) {
+        if (targets[i].isAnswer) {
+          if (currentRound < 3) {
+            currentRound++;
+            readyTimer = 2.0;
+            initRound(currentRound);
+            currentState = STATE.READY;
+          } else {
+            currentState = STATE.SUCCESS;
+          }
+        } else {
+          currentState = STATE.FAIL;
+        }
+        break;
+      }
+    }
+  } else if (currentState === STATE.FAIL || currentState === STATE.SUCCESS) {
+    if (checkButtonArea(touchX, touchY, CANVAS_WIDTH / 2, 460, 220, 60)) {
+      currentRound = 1;
+      currentState = STATE.START;
+    }
+  }
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  handleInteraction(e.clientX, e.clientY);
+});
+
+function resizeCanvas() {
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+  const baseRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
+  const currentRatio = windowWidth / windowHeight;
+
+  if (currentRatio > baseRatio) {
+    canvas.style.height = `${windowHeight}px`;
+    canvas.style.width = `${windowHeight * baseRatio}px`;
+  } else {
+    canvas.style.width = `${windowWidth}px`;
+    canvas.style.height = `${windowWidth / baseRatio}px`;
+  }
+}
+
+window.addEventListener('resize', resizeCanvas);
+document.addEventListener('fullscreenchange', resizeCanvas);
+document.addEventListener('webkitfullscreenchange', resizeCanvas);
+resizeCanvas();
+
+requestAnimationFrame(gameLoop);
+
+function toggleFullscreen() {
+  const doc = document;
+  const docEl = doc.documentElement;
+
+  const requestFullScreen = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+  const cancelFullScreen = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+
+  const isFullscreen = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+
+  if (!isFullscreen) {
+    if (requestFullScreen) {
+      requestFullScreen.call(docEl).then(() => resizeCanvas()).catch(() => {});
+      document.getElementById('btnFullscreen').innerText = '창모드';
+    }
+  } else {
+    if (cancelFullScreen) {
+      cancelFullScreen.call(doc).then(() => resizeCanvas()).catch(() => {});
+      document.getElementById('btnFullscreen').innerText = '전체화면';
+    }
+  }
+}
+</script>
+</body>
+</html>
