@@ -67,6 +67,13 @@ const CANVAS_HEIGHT = 720;
 // ==========================================
 const assets = {
   startBg: new Image(),
+  playBg: new Image(),
+  readyBgRound1: new Image(),
+  readyBgRound2: new Image(),
+  readyBgRound3: new Image(),
+  failBg: new Image(),
+  successBg: new Image(),
+  
   decoyRound1: new Image(),
   targetRound1: new Image(),
   decoyRound2: new Image(),
@@ -75,15 +82,20 @@ const assets = {
   targetRound3: new Image()
 };
 
-// 파일 경로 연결
+// 배경 이미지 경로 연결
 assets.startBg.src = 'https://i.postimg.cc/zBjLPB2F/Kakao-Talk-20260909-102747777.jpg';
+assets.playBg.src = 'https://i.postimg.cc/SKRxddFV/Kakao-Talk-20260909-121751468.png';
+assets.readyBgRound1.src = 'https://i.postimg.cc/Ls58DDK0/Kakao-Talk-20260909-121751468-01.png';
+assets.readyBgRound2.src = 'https://i.postimg.cc/rpswjjXZ/Kakao-Talk-20260909-121751468-02.png';
+assets.readyBgRound3.src = 'https://i.postimg.cc/yNx8jj4Q/Kakao-Talk-20260909-121751468-03.png';
+assets.failBg.src = 'https://i.postimg.cc/s2xgmmdL/Kakao-Talk-20260909-121751468-06.png';
+assets.successBg.src = 'https://i.postimg.cc/zfvG77ZM/Kakao-Talk-20260909-121751468-04.png';
 
+// 게임 타깃 이미지 경로 연결
 assets.decoyRound1.src = 'https://i.postimg.cc/06174bCj/Kakao-Talk-20260909-001139361.png';
 assets.targetRound1.src = 'https://i.postimg.cc/Z9z6QCL0/Kakao-Talk-20260909-001139361-01.png';
-
 assets.decoyRound2.src = 'https://i.postimg.cc/mkNscJzX/Kakao-Talk-20260908-234503943.png';
 assets.targetRound2.src = 'https://i.postimg.cc/jjZtcGZZ/Kakao-Talk-20260908-234018843.png';
-
 assets.decoyRound3.src = 'https://i.postimg.cc/PNL30FsG/Kakao-Talk-20260909-005041012-01.png';
 assets.targetRound3.src = 'https://i.postimg.cc/kX5kxfH4/Kakao-Talk-20260909-010940556.png';
 
@@ -92,33 +104,30 @@ assets.targetRound3.src = 'https://i.postimg.cc/kX5kxfH4/Kakao-Talk-20260909-010
 // ==========================================
 const ROUND_CONFIG = {
   1: {
-    name: "ROUND 1 (기초 시야)",
-    mission: "판타스틸 서포터즈 로고를 찾아 터치하세요!",
     totalCount: 5,
     speed: 3.5,
     radius: 45,
+    readyBg: assets.readyBgRound1,
     targetImg: assets.targetRound1,
     decoyImg: assets.decoyRound1,
     fallbackTargetColor: '#e74c3c',
     fallbackDecoyColor: '#2980b9'
   },
   2: {
-    name: "ROUND 2 (난전 포착)",
-    mission: "제카 사이의 쉿상혁을 찾아라!",
     totalCount: 8,
     speed: 5.5,
     radius: 40,
+    readyBg: assets.readyBgRound2,
     targetImg: assets.targetRound2,
     decoyImg: assets.decoyRound2,
     fallbackTargetColor: '#e67e22',
     fallbackDecoyColor: '#2c3e50'
   },
   3: {
-    name: "ROUND 3 (초집중 모드)",
-    mission: "안경을 쓰고 있는 판타스틸 서포터즈 석호를 찾아보세요!!",
     totalCount: 12,
     speed: 7.5,
     radius: 42,
+    readyBg: assets.readyBgRound3,
     targetImg: assets.targetRound3,
     decoyImg: assets.decoyRound3,
     fallbackTargetColor: '#ff2a2a',
@@ -236,6 +245,15 @@ function initRound(roundNum) {
   targets.sort(() => Math.random() - 0.5);
 }
 
+function drawBackground(imageObj) {
+  if (imageObj && imageObj.complete && imageObj.naturalWidth !== 0) {
+    ctx.drawImage(imageObj, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  } else {
+    ctx.fillStyle = '#0b0e14';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+}
+
 function drawButton(text, x, y, width, height, bgColor = '#1e3799') {
   ctx.save();
   ctx.fillStyle = bgColor;
@@ -288,6 +306,9 @@ function gameLoop(timestamp) {
         currentState = STATE.FAIL;
       }
 
+      // 게임 화면 전용 배경 렌더링
+      drawBackground(assets.playBg);
+
       targets.forEach(t => {
         t.update();
         t.draw(ctx);
@@ -309,47 +330,36 @@ function gameLoop(timestamp) {
 }
 
 function renderStartScreen() {
-  // 등록한 배경 이미지를 캔버스 전체에 표시
-  if (assets.startBg.complete && assets.startBg.naturalWidth !== 0) {
-    ctx.drawImage(assets.startBg, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  } else {
-    ctx.fillStyle = '#0b0e14';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  }
-
-  // 텍스트는 모두 제거하고 게임 시작 버튼만 배치 (기존 위치 Y: 440)
+  drawBackground(assets.startBg);
   drawButton("게임 시작하기", CANVAS_WIDTH / 2, 440, 240, 65, '#2563eb');
 }
 
 function renderReadyScreen() {
   const config = ROUND_CONFIG[currentRound];
-  ctx.fillStyle = '#2563eb';
-  ctx.font = 'bold 36px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(config.name, CANVAS_WIDTH / 2, 230);
+  // 라운드별 대기 배경 적용
+  drawBackground(config.readyBg);
 
-  ctx.fillStyle = '#374151';
-  ctx.font = '24px sans-serif';
-  ctx.fillText(config.mission, CANVAS_WIDTH / 2, 280);
-
+  // 안내 텍스트는 전부 제외하고 2초 카운트다운 숫자만 표시
   ctx.fillStyle = '#ef4444';
-  ctx.font = 'bold 90px sans-serif';
-  ctx.fillText(Math.ceil(readyTimer), CANVAS_WIDTH / 2, 410);
-
-  ctx.fillStyle = '#9ca3af';
-  ctx.font = '18px sans-serif';
-  ctx.fillText("잠시 후 게임이 시작됩니다...", CANVAS_WIDTH / 2, 480);
+  ctx.font = 'bold 100px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(Math.ceil(readyTimer), CANVAS_WIDTH / 2, 360);
 }
 
 function renderPlayHeader() {
-  ctx.fillStyle = '#f3f4f6';
+  // 상단 바 배경
+  ctx.fillStyle = 'rgba(243, 244, 246, 0.9)';
   ctx.fillRect(0, 0, CANVAS_WIDTH, 80);
 
+  // 상단 좌측 라운드 표시
   ctx.fillStyle = '#111827';
   ctx.font = 'bold 24px sans-serif';
   ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
   ctx.fillText(`STAGE ${currentRound} / 3`, 40, 48);
 
+  // 상단 우측 타이머 표시
   ctx.textAlign = 'right';
   ctx.font = 'bold 28px monospace';
   ctx.fillStyle = playTimer <= 2.0 ? '#dc2626' : '#111827';
@@ -363,28 +373,12 @@ function renderPlayHeader() {
 }
 
 function renderFailScreen() {
-  ctx.fillStyle = '#dc2626';
-  ctx.font = 'bold 72px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText("실패 (FAIL)", CANVAS_WIDTH / 2, 290);
-
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '22px sans-serif';
-  ctx.fillText("시간 초과 또는 잘못된 대상을 터치하였습니다.", CANVAS_WIDTH / 2, 350);
-
+  drawBackground(assets.failBg);
   drawButton("처음으로", CANVAS_WIDTH / 2, 460, 220, 60, '#1f2937');
 }
 
 function renderSuccessScreen() {
-  ctx.fillStyle = '#16a34a';
-  ctx.font = 'bold 72px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText("최종 성공 (PASS)", CANVAS_WIDTH / 2, 290);
-
-  ctx.fillStyle = '#4b5563';
-  ctx.font = '24px sans-serif';
-  ctx.fillText("축하합니다! 모든 동체시력 검증을 통과하셨습니다.", CANVAS_WIDTH / 2, 355);
-
+  drawBackground(assets.successBg);
   drawButton("처음으로", CANVAS_WIDTH / 2, 460, 220, 60, '#16a34a');
 }
 
