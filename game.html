@@ -29,7 +29,6 @@
       touch-action: none;
       display: block;
     }
-    /* 전체화면 토글 버튼 스타일 (fixed로 화면 우측 상단 고정) */
     #btnFullscreen {
       position: fixed;
       top: 15px;
@@ -63,8 +62,10 @@ const CANVAS_WIDTH = 1280;
 const CANVAS_HEIGHT = 720;
 
 // ==========================================
-// [1] 사용할 이미지 파일 등록하기
+// [1] 사용할 이미지 파일 등록하기 (GitHub Raw 링크 적용)
 // ==========================================
+const baseURL = 'https://raw.githubusercontent.com/hongsk0219-commits/game_images/main/';
+
 const assets = {
   startBg: new Image(),
   playBg: new Image(),
@@ -82,22 +83,21 @@ const assets = {
   targetRound3: new Image()
 };
 
-// 배경 이미지 경로 연결
-assets.startBg.src = 'https://i.postimg.cc/L5YWSRxb/Kakao-Talk-20260909-121751468-05.png';
-assets.playBg.src = 'https://i.postimg.cc/SKRxddFV/Kakao-Talk-20260909-121751468.png';
-assets.readyBgRound1.src = 'https://i.postimg.cc/Ls58DDK0/Kakao-Talk-20260909-121751468-01.png';
-assets.readyBgRound2.src = 'https://i.postimg.cc/rpswjjXZ/Kakao-Talk-20260909-121751468-02.png';
-assets.readyBgRound3.src = 'https://i.postimg.cc/yNx8jj4Q/Kakao-Talk-20260909-121751468-03.png';
-assets.failBg.src = 'https://i.postimg.cc/s2xgmmdL/Kakao-Talk-20260909-121751468-06.png';
-assets.successBg.src = 'https://i.postimg.cc/zfvG77ZM/Kakao-Talk-20260909-121751468-04.png';
+// GitHub Raw 링크 연결 (한글 파일명 인코딩 적용)
+assets.startBg.src = baseURL + encodeURIComponent('1. 시작.png');
+assets.playBg.src = baseURL + encodeURIComponent('1. 게임화면.png');
+assets.readyBgRound1.src = baseURL + encodeURIComponent('1. 라1.png');
+assets.readyBgRound2.src = baseURL + encodeURIComponent('1. 라2.png');
+assets.readyBgRound3.src = baseURL + encodeURIComponent('1. 라3 (2).png');
+assets.failBg.src = baseURL + encodeURIComponent('1. 실패.png');
+assets.successBg.src = baseURL + encodeURIComponent('1. 성공.png');
 
-// 게임 타깃 이미지 경로 연결
-assets.decoyRound1.src = 'https://i.postimg.cc/06174bCj/Kakao-Talk-20260909-001139361.png';
-assets.targetRound1.src = 'https://i.postimg.cc/GhBkb2r2/Kakao-Talk-20260910-225719367.png';
-assets.decoyRound2.src = 'https://i.postimg.cc/mkNscJzX/Kakao-Talk-20260908-234503943.png';
-assets.targetRound2.src = 'https://i.postimg.cc/jjZtcGZZ/Kakao-Talk-20260908-234018843.png';
-assets.decoyRound3.src = 'https://i.postimg.cc/PNL30FsG/Kakao-Talk-20260909-005041012-01.png';
-assets.targetRound3.src = 'https://i.postimg.cc/kX5kxfH4/Kakao-Talk-20260909-010940556.png';
+assets.decoyRound1.src = baseURL + encodeURIComponent('라1 미끼.png');
+assets.targetRound1.src = baseURL + encodeURIComponent('라1 정답 (2).png');
+assets.decoyRound2.src = baseURL + encodeURIComponent('라2 미끼.png');
+assets.targetRound2.src = baseURL + encodeURIComponent('라2 정답.png');
+assets.decoyRound3.src = baseURL + encodeURIComponent('라3 미끼.png');
+assets.targetRound3.src = baseURL + encodeURIComponent('라3 정답.png');
 
 // ==========================================
 // [2] 라운드별 설정
@@ -146,7 +146,7 @@ const STATE = {
 let currentState = STATE.START;
 let currentRound = 1;
 let readyTimer = 2.0;
-let playTimer = 5.0; // 5초 설정
+let playTimer = 5.0;
 let lastTime = 0;
 let targets = [];
 
@@ -306,7 +306,6 @@ function gameLoop(timestamp) {
         currentState = STATE.FAIL;
       }
 
-      // 게임 화면 전용 배경 렌더링
       drawBackground(assets.playBg);
 
       targets.forEach(t => {
@@ -336,10 +335,8 @@ function renderStartScreen() {
 
 function renderReadyScreen() {
   const config = ROUND_CONFIG[currentRound];
-  // 라운드별 대기 배경 적용
   drawBackground(config.readyBg);
 
-  // 안내 텍스트는 전부 제외하고 2초 카운트다운 숫자만 표시
   ctx.fillStyle = '#ef4444';
   ctx.font = 'bold 100px sans-serif';
   ctx.textAlign = 'center';
@@ -348,18 +345,15 @@ function renderReadyScreen() {
 }
 
 function renderPlayHeader() {
-  // 상단 바 배경
   ctx.fillStyle = 'rgba(243, 244, 246, 0.9)';
   ctx.fillRect(0, 0, CANVAS_WIDTH, 80);
 
-  // 상단 좌측 라운드 표시
   ctx.fillStyle = '#111827';
   ctx.font = 'bold 24px sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(`STAGE ${currentRound} / 3`, 40, 48);
 
-  // 상단 우측 타이머 표시
   ctx.textAlign = 'right';
   ctx.font = 'bold 28px monospace';
   ctx.fillStyle = playTimer <= 2.0 ? '#dc2626' : '#111827';
